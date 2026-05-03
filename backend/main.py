@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 
 from database import engine, Base
-from routes import auth
+from routes import auth, tender
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -26,6 +26,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Include Routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(tender.router, prefix="/api/tender", tags=["Tender Management"])
 
 @app.get("/health")
 def health_check():
