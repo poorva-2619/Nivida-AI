@@ -6,16 +6,33 @@ export default function Login() {
   const [selectedRole, setSelectedRole] = useState('admin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [localError, setLocalError] = useState('');
+  
   const login = useAuthStore((state) => state.login);
+  const loading = useAuthStore((state) => state.loading);
+  const error = useAuthStore((state) => state.error);
+  
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    login(selectedRole, email || 'User', 'mock-token-123');
-    if (selectedRole === 'admin') {
-      navigate('/admin/dashboard');
-    } else {
-      navigate('/vendor/dashboard');
+    setLocalError('');
+    
+    const result = await login(email, password);
+    
+    if (result.success) {
+      if (result.role !== selectedRole) {
+        setLocalError(`You are registered as a ${result.role}, not an ${selectedRole}.`);
+        // We could log them out or just show an error. Let's redirect them appropriately anyway, or block them.
+        // For strict role checking, let's block them if they selected the wrong portal.
+        return;
+      }
+      
+      if (result.role === 'admin') {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/vendor/dashboard');
+      }
     }
   };
 
@@ -96,6 +113,7 @@ export default function Login() {
                   className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-navy focus:border-navy outline-none transition-colors text-black"
                   placeholder="name@government.in"
                   required
+                  disabled={loading}
                 />
               </div>
               
@@ -108,15 +126,23 @@ export default function Login() {
                   className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-navy focus:border-navy outline-none transition-colors text-black"
                   placeholder="••••••••"
                   required
+                  disabled={loading}
                 />
               </div>
             </div>
 
+            {(error || localError) && (
+              <div className="p-3 bg-red-100 text-red-700 rounded-lg text-sm font-medium">
+                {localError || error}
+              </div>
+            )}
+
             <button 
               type="submit" 
-              className="w-full bg-gold hover:bg-yellow-500 text-navy font-bold text-lg py-3 rounded-lg shadow-md transition-colors"
+              disabled={loading}
+              className={`w-full ${loading ? 'bg-gold/70 cursor-not-allowed' : 'bg-gold hover:bg-yellow-500'} text-navy font-bold text-lg py-3 rounded-lg shadow-md transition-colors`}
             >
-              Login
+              {loading ? 'Logging in...' : 'Login'}
             </button>
           </form>
         </div>
