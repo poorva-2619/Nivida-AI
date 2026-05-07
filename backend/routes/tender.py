@@ -4,10 +4,11 @@ from typing import List
 import json
 
 from database import get_db
-from models import User, Tender, VendorSubmission
+from models import User, Tender, VendorSubmission, Criteria
 from routes.auth import get_current_user
 from utils.file_handler import save_tender_file, save_vendor_submission_files, get_extension
 from services.ocr_service import OCRService
+from services.llm_service import LLMService
 
 router = APIRouter()
 
@@ -98,3 +99,70 @@ def vendor_submit_documents(
         db.delete(new_submission)
         db.commit()
         raise HTTPException(status_code=500, detail=f"Submission failed: {str(e)}")
+
+@router.post("/{tender_id}/extract-criteria")
+def extract_tender_criteria(
+    tender_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only administrators can extract criteria")
+        
+    tender = db.query(Tender).filter(Tender.id == tender_id).first()
+    if not tender:
+        raise HTTPException(status_code=404, detail="Tender not found")
+        
+    file_type = get_extension(tender.file_path)
+    ocr_result = OCRService.extract_text_from_file(tender.file_path, file_type)
+    tender_text = ocr_result.get("text", "")
+    
+    if not tender_text:
+        raise HTTPException(status_code=400, detail="Could not extract text from tender document")
+
+    extraction_result = LLMService.extract_tender_criteria(tender_text)
+    
+    # Delete existing criteria for this tender if any
+    db.query(Criteria).filter(Criteria.tender_id == tender_id).delete()
+    
+    for crit in extraction_result.get("criteria", []):
+        new_crit = Criteria(
+            tender_id=tender.id,
+            code=crit.get("id"),
+            title=crit.get("title"),
+            type=crit.get("type"),
+            mandatory=crit.get("mandatory", True),
+            requirement=crit.get("requirement"),
+            threshold_value=crit.get("threshold_value"),
+            threshold_unit=crit.get("threshold_unit"),
+            comparison=crit.get("comparison")
+        )
+        db.add(new_crit)
+    
+    db.commit()
+    
+    criteria_list = extraction_result.get("criteria", [])
+    summary_doc = LLMService.generate_summary_document(tender_text, criteria_list)
+    
+    tender.summary_json = json.dumps(summary_doc)
+    db.commit()
+    
+    return {
+        "criteria": extraction_result,
+        "summary": summary_doc
+    }
+
+@router.get("/{tender_id}/summary")
+def get_tender_summary(
+    tender_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    tender = db.query(Tender).filter(Tender.id == tender_id).first()
+    if not tender:
+        raise HTTPException(status_code=404, detail="Tender not found")
+        
+    if not tender.summary_json:
+        raise HTTPException(status_code=404, detail="Summary not available for this tender")
+        
+    return json.loads(tender.summary_json)

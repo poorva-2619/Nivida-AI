@@ -20,6 +20,7 @@ class Tender(Base):
     file_path = Column(String)
     status = Column(String, default="active")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    summary_json = Column(Text, nullable=True)
 
     criteria = relationship("Criteria", back_populates="tender")
     submissions = relationship("VendorSubmission", back_populates="tender")
