@@ -50,19 +50,26 @@ class VendorSubmission(Base):
     submitted_at = Column(DateTime(timezone=True), server_default=func.now())
 
     tender = relationship("Tender", back_populates="submissions")
+    results = relationship("EvaluationResult", back_populates="submission")
 
 class EvaluationResult(Base):
     __tablename__ = "evaluation_results"
     id = Column(Integer, primary_key=True, index=True)
     submission_id = Column(Integer, ForeignKey("vendor_submissions.id"))
     criteria_id = Column(Integer, ForeignKey("criteria.id"))
-    verdict = Column(String)
+    verdict = Column(String) # PASS, FAIL, REVIEW
+    required_value = Column(String, nullable=True)
+    found_value = Column(String, nullable=True)
     confidence = Column(Float)
     explanation = Column(Text)
-    source_snippet = Column(Text)
-    officer_override = Column(Boolean, default=False)
+    source_snippet = Column(Text, nullable=True)
+    fail_warning = Column(Text, nullable=True)
+    officer_override = Column(String, nullable=True) # PASS, FAIL or None
     officer_notes = Column(Text, nullable=True)
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
+
+    submission = relationship("VendorSubmission", back_populates="results")
+    criterion = relationship("Criteria")
 
 class FraudFlag(Base):
     __tablename__ = "fraud_flags"
@@ -71,6 +78,7 @@ class FraudFlag(Base):
     flag_type = Column(String)
     vendor_ids_json = Column(Text)
     message = Column(Text)
+    severity = Column(String) # HIGH, MEDIUM, LOW
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class AuditLog(Base):
